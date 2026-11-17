@@ -1,0 +1,169 @@
+openapi: 3.1.0
+info:
+  title: BetterlinkAgr AI — Zimbabwe Agri-Input Sales Representative API
+  version: 1.0.0
+  description: >
+    Versioned REST API (/api/v1) for WhatsApp Cloud API webhooks, Web Chat Widget,
+    SMS/USSD fallback, Outlet Portal stock & reservation management, and Zimbabwe
+    Cyber and Data Protection Act [Cap 12:07] data subject endpoints.
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local / Development Server
+
+paths:
+  /webhooks/whatsapp:
+    get:
+      summary: Meta WhatsApp Cloud API Verification Challenge
+      parameters:
+        - name: hub.mode
+          in: query
+          required: true
+          schema: { type: string }
+        - name: hub.verify_token
+          in: query
+          required: true
+          schema: { type: string }
+        - name: hub.challenge
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Challenge echoed as plain text
+    post:
+      summary: Inbound WhatsApp Cloud API Webhook (HMAC-SHA256 Verified & Redis Idempotent)
+      parameters:
+        - name: X-Hub-Signature-256
+          in: header
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Accepted and queued to Horizon (webhooks-high)
+
+  /webhooks/sms-ussd:
+    post:
+      summary: SMS & USSD Fallback Gateway Webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from, text]
+              properties:
+                from: { type: string, example: "+263772111222" }
+                text: { type: string, example: "Chibage changu chine gonye" }
+                channel: { type: string, enum: [sms, ussd], default: sms }
+      responses:
+        '200':
+          description: Plain-text SMS/USSD response returned
+
+  /web-chat/messages:
+    post:
+      summary: Send a message, photo, voice note, or GPS pin from the Web Chat Widget or Flutter App
+      parameters:
+        - name: X-Tenant-Slug
+          in: header
+          required: false
+          schema: { type: string, default: farmserve-zimbabwe }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone: { type: string, example: "+263772999000" }
+                farmer_name: { type: string }
+                message_text: { type: string }
+                photo: { type: string, format: binary }
+                voice_note: { type: string, format: binary }
+                latitude: { type: number }
+                longitude: { type: number }
+                language: { type: string, enum: [en, sn, nd] }
+      responses:
+        '200':
+          description: State machine turn output with context chip, buttons, and rich cards
+
+  /web-chat/feedback:
+    post:
+      summary: Submit farmer satisfaction rating (thumbs up/down & 1-10 score)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [conversation_id]
+              properties:
+                conversation_id: { type: string, format: uuid }
+                thumbs_up: { type: boolean }
+                rating: { type: integer, minimum: 1, maximum: 10 }
+                feedback_text: { type: string }
+      responses:
+        '200':
+          description: Feedback recorded
+
+  /outlets/{outletId}/stock-text:
+    post:
+      summary: Update outlet stock via WhatsApp-style text string
+      parameters:
+        - name: outletId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stock_line]
+              properties:
+                stock_line: { type: string, example: "Compound D 50kg: 40 bags USD 32" }
+      responses:
+        '200':
+          description: Stock updated
+
+  /reservations/{reservationId}/respond:
+    post:
+      summary: Confirm, reject, or mark a reservation as sold (recording SalesAttribution)
+      parameters:
+        - name: reservationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [confirm, reject, mark_sold] }
+                reason: { type: string }
+                currency: { type: string, enum: [USD, ZIG] }
+      responses:
+        '200':
+          description: Reservation status updated
+
+  /privacy/farmer/export:
+    post:
+      summary: Export portable JSON of farmer personal and farm records (Zimbabwe CDPA Cap 12:07)
+      security:
+        - sanctumAuth: []
+      responses:
+        '200':
+          description: Portable JSON exported
+
+  /privacy/farmer/erase:
+    delete:
+      summary: Right to erasure & cryptographic PII anonymization (Zimbabwe CDPA Cap 12:07)
+      security:
+        - sanctumAuth: []
+      responses:
+        '200':
+          description: Farmer PII anonymized and erased

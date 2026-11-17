@@ -1,0 +1,36 @@
+name: BetterlinkAgr AI — CI & Guardrail Verification
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  tests-and-guardrails:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3 with GD, EXIF, PgSQL & Redis
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, dom, fileinfo, pdo_sqlite, pdo_pgsql, gd, exif, intl, zip, bcmath, redis
+          coverage: none
+
+      - name: Install Composer Dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Prepare Environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Check PSR-12 Code Style (Laravel Pint)
+        run: ./vendor/bin/pint --test
+
+      - name: Run Pest Unit & Feature Guardrail Suite
+        run: ./vendor/bin/pest
