@@ -6,6 +6,7 @@ namespace App\Filament\Platform\Resources;
 
 use App\Enums\RecommendationScope;
 use App\Enums\TenantType;
+use App\Filament\Platform\Resources\TenantResource\Pages;
 use App\Models\Tenant;
 use Filament\Forms;
 use Filament\Forms\Form;

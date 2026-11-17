@@ -13,7 +13,7 @@ class QueuedOutgoingTurn {
   final double? longitude;
   final DateTime queuedAt;
 
-  const int cacheRetentionDays = 30;
+  static const int cacheRetentionDays = 30;
 
   QueuedOutgoingTurn({
     required this.id,

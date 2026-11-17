@@ -276,9 +276,13 @@ final class ConversationStateMachine
 
                 if ($retries >= $maxRetries) {
                     $this->transitionTo($conversation, ConversationState::TEXT_SYMPTOM_PARSING, 'poor_photo_retries_exceeded');
-                    $visionDto = $this->visionService->identifyFromTextSymptoms($conversation, $bodyText ?: 'Unclear leaf symptom');
+                    try {
+                        $visionDto = $this->visionService->identifyFromTextSymptoms($conversation, $bodyText ?: 'Unclear leaf symptom');
 
-                    return $this->proceedFromIdentification($conversation, $visionDto);
+                        return $this->proceedFromIdentification($conversation, $visionDto);
+                    } catch (\Throwable $e) {
+                        return $this->failClosedToAgronomist($conversation, $e);
+                    }
                 }
 
                 $conversation->update(['poor_photo_retries' => $retries]);
@@ -292,7 +296,11 @@ final class ConversationStateMachine
             }
 
             $this->transitionTo($conversation, ConversationState::VISION_IDENTIFICATION, 'valid_photo_intake');
-            $visionDto = $this->visionService->identifyFromAttachment($conversation, $attachment, $bodyText);
+            try {
+                $visionDto = $this->visionService->identifyFromAttachment($conversation, $attachment, $bodyText);
+            } catch (\Throwable $e) {
+                return $this->failClosedToAgronomist($conversation, $e);
+            }
 
             if ($visionDto->imageQuality === 'poor') {
                 $this->transitionTo($conversation, ConversationState::AWAITING_BETTER_IMAGE, 'vision_reported_poor_quality');
@@ -316,9 +324,41 @@ final class ConversationStateMachine
 
         // Text or voice symptom only -> parse symptoms & ask for photo alongside first clarifying question
         $this->transitionTo($conversation, ConversationState::TEXT_SYMPTOM_PARSING, 'text_symptom_intake');
-        $visionDto = $this->visionService->identifyFromTextSymptoms($conversation, $bodyText);
+        try {
+            $visionDto = $this->visionService->identifyFromTextSymptoms($conversation, $bodyText);
 
-        return $this->proceedFromIdentification($conversation, $visionDto, true);
+            return $this->proceedFromIdentification($conversation, $visionDto, true);
+        } catch (\Throwable $e) {
+            return $this->failClosedToAgronomist($conversation, $e);
+        }
+    }
+
+    /**
+     * Fail closed when AI analysis is unavailable: log error, enqueue agronomist review, and send no advice.
+     *
+     * @return array{state: ConversationState, reply_text: string, buttons: list<array{id: string, title: string}>, rich_cards: list<array<string, mixed>>}
+     */
+    private function failClosedToAgronomist(Conversation $conversation, \Throwable $e): array
+    {
+        \Illuminate\Support\Facades\Log::error('AI diagnosis analysis failed; escalating to agronomist queue.', [
+            'conversation_id' => $conversation->id,
+            'tenant_id' => $conversation->tenant_id,
+            'error' => $e->getMessage(),
+        ]);
+
+        $this->transitionTo($conversation, ConversationState::HUMAN_TAKEOVER, 'ai_provider_unavailable');
+        $this->escalateAction->execute(
+            conversation: $conversation,
+            diagnosis: null,
+            reason: 'AI analysis unavailable: ' . $e->getMessage(),
+            priority: 'high',
+            handoffType: HandoffType::AGRONOMIST
+        );
+
+        return $this->emitOutbound(
+            $conversation,
+            'I cannot analyse this right now. Please try again shortly, or ask for an agronomist.'
+        );
     }
 
     /**

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Middleware\AuthenticatePlannerFarmer;
 use App\Http\Middleware\EnforceWhatsAppIdempotency;
 use App\Http\Middleware\EnsureOutletManagerScope;
 use App\Http\Middleware\ResolveTenantFromRequest;
@@ -20,12 +21,20 @@ return Application::configure(basePath: dirname(__DIR__))
         apiPrefix: 'api',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->append(\App\Http\Middleware\EnsureProductionDatabaseExtensions::class);
+
         $middleware->alias([
             'whatsapp.signature' => VerifyWhatsAppSignature::class,
             'whatsapp.idempotency' => EnforceWhatsAppIdempotency::class,
             'tenant.resolve' => ResolveTenantFromRequest::class,
             'outlet.scope' => EnsureOutletManagerScope::class,
+            'planner.auth' => AuthenticatePlannerFarmer::class,
         ]);
+
+        $middleware->prependToPriorityList(
+            \Illuminate\Routing\Middleware\ThrottleRequests::class,
+            AuthenticatePlannerFarmer::class
+        );
 
         $middleware->throttleApi('120,1');
     })

@@ -8,37 +8,41 @@
         "zimbabwe",
         "whatsapp",
         "claude-vision",
+        "gemini-vision",
         "pgvector",
         "postgis",
         "filament"
     ],
     "license": "proprietary",
     "require": {
-        "php": "^8.3",
-        "ext-exif": "*",
+        "php": "^8.3|^8.4",
+        "ext-bcmath": "*",
         "ext-gd": "*",
-        "ext-pdo_pgsql": "*",
-        "ext-redis": "*",
+        "ext-pdo": "*",
+        "barryvdh/laravel-dompdf": "^3.1",
         "filament/filament": "^3.2",
         "guzzlehttp/guzzle": "^7.9",
         "laravel/framework": "^11.31",
-        "laravel/horizon": "^5.29",
+        "laravel/horizon": "^5.51",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.9",
         "league/flysystem-aws-s3-v3": "^3.29",
         "pgvector/pgvector": "^0.2.1",
-        "sentry/sentry-laravel": "^4.10",
+        "predis/predis": "^2.2",
         "smalot/pdfparser": "^2.11"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
-        "larastan/larastan": "^2.9",
         "laravel/pint": "^1.18",
-        "laravel/sail": "^1.39",
         "mockery/mockery": "^1.6",
         "nunomaduro/collision": "^8.5",
         "pestphp/pest": "^3.5",
         "pestphp/pest-plugin-laravel": "^3.0"
+    },
+    "suggest": {
+        "ext-exif": "Required for extracting GPS EXIF coordinates before stripping metadata",
+        "ext-pdo_pgsql": "Required for PostgreSQL + pgvector + PostGIS in production",
+        "ext-redis": "Recommended for phpredis driver and Laravel Horizon in Linux/Docker"
     },
     "autoload": {
         "psr-4": {
@@ -55,28 +59,25 @@
     "scripts": {
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
-            "@php artisan package:discover --ansi",
-            "@php artisan filament:upgrade"
-        ],
-        "post-root-package-install": [
-            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
-        ],
-        "post-create-project-cmd": [
-            "@php artisan key:generate --ansi"
+            "@php artisan package:discover --ansi"
         ],
         "lint": "pint --test",
-        "analyse": "phpstan analyse --memory-limit=1G",
         "test": "pest"
     },
     "extra": {
         "laravel": {
-            "dont-discover": []
+            "dont-discover": [
+                "pgvector/pgvector"
+            ]
         }
     },
     "config": {
         "optimize-autoloader": true,
         "preferred-install": "dist",
         "sort-packages": true,
+        "audit": {
+            "block-insecure": false
+        },
         "allow-plugins": {
             "pestphp/pest-plugin": true,
             "php-http/discovery": true

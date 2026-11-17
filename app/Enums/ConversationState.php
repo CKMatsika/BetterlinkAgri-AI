@@ -104,10 +104,12 @@ enum ConversationState: string
                 self::ESCALATED_HIGH_STAKES,
                 self::CLARIFYING_QUESTIONS,
                 self::DETERMINISTIC_TOOL_EXECUTION,
+                self::HUMAN_TAKEOVER,
             ],
             self::TEXT_SYMPTOM_PARSING => [
                 self::CLARIFYING_QUESTIONS,
                 self::ESCALATED_HIGH_STAKES,
+                self::HUMAN_TAKEOVER,
             ],
             self::CLARIFYING_QUESTIONS => [
                 self::AWAITING_QUESTION_ANSWER,

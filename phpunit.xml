@@ -27,6 +27,13 @@
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
+        <env name="FILESYSTEM_DISK" value="local"/>
+        <env name="MEDIA_DISK" value="local"/>
+        <env name="AI_DEFAULT_PROVIDER" value="fake"/>
+        <env name="ANTHROPIC_API_KEY" value=""/>
+        <env name="GEMINI_API_KEY" value=""/>
+        <env name="VOYAGE_API_KEY" value=""/>
+        <env name="OPENAI_API_KEY" value=""/>
         <env name="WHATSAPP_ENABLED" value="false"/>
         <env name="WHATSAPP_APP_SECRET" value="test_whatsapp_secret_key"/>
         <env name="WHATSAPP_VERIFY_TOKEN" value="test_verify_token"/>

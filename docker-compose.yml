@@ -6,6 +6,9 @@ services:
     container_name: betterlink_app
     restart: unless-stopped
     env_file: .env
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
     volumes:
       - .:/var/www/html
     depends_on:
@@ -38,6 +41,9 @@ services:
     restart: unless-stopped
     command: php artisan horizon
     env_file: .env
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
     volumes:
       - .:/var/www/html
     depends_on:
@@ -54,6 +60,9 @@ services:
     restart: unless-stopped
     command: php artisan schedule:work
     env_file: .env
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
     volumes:
       - .:/var/www/html
     depends_on:
@@ -63,7 +72,9 @@ services:
       - betterlink_net
 
   postgres:
-    image: postgis/postgis:16-3.4
+    build:
+      context: .
+      dockerfile: docker/postgres/Dockerfile
     container_name: betterlink_postgres
     restart: unless-stopped
     environment:

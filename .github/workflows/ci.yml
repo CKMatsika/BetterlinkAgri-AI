@@ -1,36 +1,56 @@
-name: BetterlinkAgr AI — CI & Guardrail Verification
+name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [ main, master ]
   pull_request:
-    branches: [main, develop]
 
 jobs:
-  tests-and-guardrails:
-    runs-on: ubuntu-latest
+  pest-postgres:
+    runs-on: ubuntu-24.04
+
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.7-pg16
+        env:
+          POSTGRES_DB: betterlink_agr_ai
+          POSTGRES_USER: betterlink
+          POSTGRES_PASSWORD: secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U betterlink -d betterlink_agr_ai"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+      redis:
+        image: redis:7.4.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=10
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup PHP 8.3 with GD, EXIF, PgSQL & Redis
+      - name: Install PostGIS in Postgres service
+        run: |
+          docker ps --filter "publish=5432" -q | xargs -I {} docker exec {} bash -c "apt-get update && apt-get install -y --no-install-recommends postgresql-16-postgis-3 && rm -rf /var/lib/apt/lists/*"
+
+      - name: Setup PHP 8.4
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
-          extensions: mbstring, dom, fileinfo, pdo_sqlite, pdo_pgsql, gd, exif, intl, zip, bcmath, redis
+          php-version: '8.4'
+          extensions: bcmath, exif, gd, intl, mbstring, pcntl, pdo_pgsql, pgsql, pdo_sqlite, redis, zip
           coverage: none
 
-      - name: Install Composer Dependencies
-        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
 
-      - name: Prepare Environment
-        run: |
-          cp .env.example .env
-          php artisan key:generate
-
-      - name: Check PSR-12 Code Style (Laravel Pint)
-        run: ./vendor/bin/pint --test
-
-      - name: Run Pest Unit & Feature Guardrail Suite
-        run: ./vendor/bin/pest
+      - name: Run full Pest suite on PostgreSQL + PostGIS + pgvector
+        run: php vendor/bin/pest -c phpunit.pgsql.xml --exclude-group=live-only

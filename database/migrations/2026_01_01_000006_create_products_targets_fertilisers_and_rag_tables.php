@@ -69,7 +69,7 @@ return new class extends Migration
             $table->decimal('dose_per_ha_value', 10, 2);
             $table->string('dose_per_ha_unit', 15); // ml|L|g|kg
             $table->decimal('water_volume_per_ha_litres', 8, 2)->default(200.00);
-            $table->string('mixing_order', 120)->nullable();
+            $table->text('mixing_order')->nullable();
             $table->text('application_timing_notes')->nullable();
             $table->unsignedSmallInteger('reapplication_interval_days')->nullable();
             $table->unsignedTinyInteger('max_applications_per_season')->nullable();

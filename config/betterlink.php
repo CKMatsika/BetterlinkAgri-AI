@@ -21,7 +21,13 @@ return [
     */
     'localization' => [
         'country_code' => env('ZW_DEFAULT_COUNTRY_CODE', '263'),
-        'supported_locales' => ['en', 'sn', 'nd'],
+        'enable_sn_nd' => (bool) env('APP_ENABLE_SN_ND_TRANSLATIONS', false),
+        'translation_review_status' => [
+            'en' => 'reviewed',
+            'sn' => 'needs_native_review',
+            'nd' => 'needs_native_review',
+        ],
+        'supported_locales' => env('APP_ENABLE_SN_ND_TRANSLATIONS', false) ? ['en', 'sn', 'nd'] : ['en'],
         'currencies' => ['USD', 'ZIG'],
         'default_currency' => env('ZW_DEFAULT_CURRENCY', 'USD'),
         'default_usd_to_zig_rate' => (float) env('ZW_DEFAULT_USD_TO_ZIG_RATE', 25.50),
@@ -39,11 +45,22 @@ return [
     |--------------------------------------------------------------------------
     | Agronomy & Pfumvudza / Intwasa Standard Constants
     |--------------------------------------------------------------------------
+    | Note: plants_per_station is configured per crop on crops.pfumvudza_plants_per_station.
+    | Values without a verified local document page citation are marked 'unverified'.
     */
     'agronomy' => [
-        'pfumvudza_plot_area_m2' => (int) env('PFUMVUDZA_PLOT_AREA_M2', 624), // 39m x 16m
-        'pfumvudza_standard_stations' => (int) env('PFUMVUDZA_STANDARD_STATIONS', 1456), // 52 rows x 28 holes
-        'pfumvudza_plants_per_station' => (int) env('PFUMVUDZA_PLANTS_PER_STATION', 2),
+        'pfumvudza_plot_area_m2' => [
+            'value' => (int) env('PFUMVUDZA_PLOT_AREA_M2', 624), // 39m x 16m
+            'source_document' => 'Foundations for Farming / Zimbabwe Agritex Pfumvudza Field Guide',
+            'source_page' => null,
+            'status' => 'unverified',
+        ],
+        'pfumvudza_standard_stations' => [
+            'value' => (int) env('PFUMVUDZA_STANDARD_STATIONS', 1456), // 52 rows x 28 stations
+            'source_document' => 'Foundations for Farming / Zimbabwe Agritex Pfumvudza Field Guide',
+            'source_page' => null,
+            'status' => 'unverified',
+        ],
         'standard_knapsack_litres' => (int) env('STANDARD_KNAPSACK_LITRES', 16),
         'standard_fertiliser_bag_kg' => (int) env('STANDARD_FERTILISER_BAG_KG', 50),
     ],
@@ -147,14 +164,26 @@ return [
     */
     'ai' => [
         'default_provider' => env('AI_DEFAULT_PROVIDER', 'anthropic'),
+        'embedding_provider' => env('AI_EMBEDDING_PROVIDER', 'voyage'),
         'vector_dimension' => (int) env('PGVECTOR_DIMENSION', 1024),
+        'gemini' => [
+            'enabled' => false,
+            'api_key' => env('GEMINI_API_KEY'),
+            'base_url' => rtrim((string) env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'), '/'),
+            'vision_model' => env('GEMINI_VISION_MODEL', 'gemini-2.5-flash'),
+            'reasoning_model' => env('GEMINI_REASONING_MODEL', 'gemini-2.5-flash'),
+            'embedding_model' => env('GEMINI_EMBEDDING_MODEL', 'text-embedding-004'),
+            'max_tokens' => (int) env('GEMINI_MAX_TOKENS', 2048),
+            'temperature' => (float) env('GEMINI_TEMPERATURE', 0.1),
+            'timeout' => (int) env('GEMINI_REQUEST_TIMEOUT', 45),
+        ],
         'anthropic' => [
             'api_key' => env('ANTHROPIC_API_KEY'),
             'base_url' => rtrim((string) env('ANTHROPIC_BASE_URL', 'https://api.anthropic.com/v1'), '/'),
             'api_version' => env('ANTHROPIC_API_VERSION', '2023-06-01'),
-            'vision_model' => env('ANTHROPIC_VISION_MODEL', 'claude-3-5-sonnet-20241022'),
-            'reasoning_model' => env('ANTHROPIC_REASONING_MODEL', 'claude-3-5-sonnet-20241022'),
-            'fast_model' => env('ANTHROPIC_FAST_MODEL', 'claude-3-5-haiku-20241022'),
+            'vision_model' => env('ANTHROPIC_VISION_MODEL', 'claude-sonnet-5-5'),
+            'reasoning_model' => env('ANTHROPIC_REASONING_MODEL', 'claude-sonnet-5-5'),
+            'fast_model' => env('ANTHROPIC_FAST_MODEL', 'claude-haiku-5-5'),
             'max_tokens' => (int) env('ANTHROPIC_MAX_TOKENS', 2048),
             'temperature' => (float) env('ANTHROPIC_TEMPERATURE', 0.1),
             'timeout' => (int) env('ANTHROPIC_REQUEST_TIMEOUT', 45),
@@ -187,6 +216,18 @@ return [
         'spray_max_rain_prob_pct' => (int) env('SPRAY_MAX_RAIN_PROBABILITY_PCT', 30),
         'spray_rain_free_window_hours' => (int) env('SPRAY_RAIN_FREE_WINDOW_HOURS', 4),
         'spray_max_temp_celsius' => (float) env('SPRAY_MAX_TEMP_CELSIUS', 30.0),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Farm Planning Engine Configuration
+    |--------------------------------------------------------------------------
+    */
+    'planning' => [
+        'allow_unverified_demo_numbers' => (bool) env(
+            'PLANNING_ALLOW_UNVERIFIED_DEMO_NUMBERS',
+            env('APP_ENV', 'production') !== 'production'
+        ),
     ],
 
     /*

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Consent;
 
 use App\Models\AuditLog;
+use App\Models\ConsentEvent;
 use App\Models\Farmer;
 use App\Models\LocationConsent;
 
@@ -28,6 +29,22 @@ final class RecordLocationConsentAction
                 'consented_at' => now(),
                 'revoked_at' => null,
             ]
+        );
+
+        ConsentEvent::record(
+            tenantId: $tenantId,
+            farmerId: $farmer->id,
+            scope: 'gps_capture',
+            action: $gpsCaptureConsent ? 'granted' : 'revoked',
+            source: 'location_consent_update'
+        );
+
+        ConsentEvent::record(
+            tenantId: $tenantId,
+            farmerId: $farmer->id,
+            scope: 'share_exact_with_outlet',
+            action: $shareExactWithOutletConsent ? 'granted' : 'revoked',
+            source: 'location_consent_update'
         );
 
         AuditLog::query()->create([

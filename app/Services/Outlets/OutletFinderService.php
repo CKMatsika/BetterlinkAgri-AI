@@ -14,12 +14,16 @@ use App\Models\OutletProductAuthorisation;
 use App\Models\OutletStock;
 use App\Models\Tenant;
 use App\Models\Ward;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Section 7: Location-Aware Retailer Finder (OutletFinderService).
  *
  * Deterministic SQL/PostGIS & Spatial Service (NOT the LLM):
  * - Filter: outlet authorised for the SKU, stock not "out_of_stock", outlet active.
+ * - On PostgreSQL/PostGIS: executes ST_DWithin(location_point, ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography, radius_m)
+ *   and ST_Distance(location_point, ...) / 1000.0 AS distance_km using the GiST index idx_outlets_location_gist.
  * - Radius expands automatically: 25 km -> 50 km -> 100 km -> same Province.
  * - Rank by: stock confidence & freshness, then distance, then open now, then delivery, then price.
  *   Weights are tenant-configurable.
@@ -72,130 +76,120 @@ final class OutletFinderService
             (array) ($tenant->outlet_ranking_weights ?? [])
         );
 
-        // Fetch all active outlets for this tenant that have authorised, non-out-of-stock items for at least 1 product in basket
-        $candidateOutlets = Outlet::withoutGlobalScopes()
-            ->with(['ward', 'district'])
-            ->where('tenant_id', '=', $tenant->id)
-            ->where('is_active', '=', true)
-            ->get();
-
-        $evaluatedOutlets = [];
-
-        foreach ($candidateOutlets as $outlet) {
-            // Check authorised & stocked items for the requested basket
-            $authorisedProductIds = OutletProductAuthorisation::withoutGlobalScopes()
-                ->where('outlet_id', '=', $outlet->id)
-                ->whereIn('product_id', $productIds)
-                ->where('is_authorised', '=', true)
-                ->pluck('product_id')
-                ->map(fn ($id) => (string) $id)
-                ->all();
-
-            if ($authorisedProductIds === []) {
-                continue;
-            }
-
-            $stockRows = OutletStock::withoutGlobalScopes()
-                ->with('product')
-                ->where('outlet_id', '=', $outlet->id)
-                ->whereIn('product_id', $authorisedProductIds)
-                ->where('quantity_band', '!=', StockQuantityBand::OUT_OF_STOCK->value)
-                ->get();
-
-            if ($stockRows->isEmpty()) {
-                continue;
-            }
-
-            $distanceKm = $this->haversineDistanceKm(
-                $farmerLat,
-                $farmerLng,
-                (float) $outlet->latitude,
-                (float) $outlet->longitude
-            );
-
-            $groupedByProduct = $stockRows->groupBy('product_id');
-            $basketItems = [];
-            $stockScoreAccum = 0.0;
-            $usdPricesSum = 0.0;
-
-            foreach ($groupedByProduct as $prodId => $rows) {
-                $firstRow = $rows->first();
-                if ($firstRow === null) {
-                    continue;
-                }
-
-                $usdRow = $rows->firstWhere('currency', CurrencyCode::USD);
-                $zigRow = $rows->firstWhere('currency', CurrencyCode::ZIG);
-
-                $isFresh = $firstRow->isFresh($freshnessHours);
-                $bandScore = $firstRow->quantity_band->confidenceScore();
-                $freshnessMultiplier = $isFresh ? 1.0 : 0.45;
-                $stockScoreAccum += ($bandScore * $freshnessMultiplier);
-
-                $priceUsd = $usdRow !== null ? (float) $usdRow->price : null;
-                $priceZig = $zigRow !== null ? (float) $zigRow->price : null;
-                if ($priceUsd !== null) {
-                    $usdPricesSum += $priceUsd;
-                }
-
-                $basketItems[] = [
-                    'product_id' => (string) $prodId,
-                    'sku' => (string) ($firstRow->product?->sku ?? ''),
-                    'product_name' => (string) ($firstRow->product?->name ?? 'Product'),
-                    'pack_size' => (string) $firstRow->pack_size,
-                    'quantity_band' => $firstRow->quantity_band->value,
-                    'price_usd' => $priceUsd,
-                    'price_zig' => $priceZig,
-                    'is_fresh' => $isFresh,
-                    'last_updated_human' => $firstRow->last_updated_at?->diffForHumans() ?? 'unknown',
-                    'stale_warning' => $isFresh ? null : 'Stock last updated >48h ago — please call to confirm.',
-                ];
-            }
-
-            $matchedCount = count($basketItems);
-            if ($matchedCount === 0) {
-                continue;
-            }
-
-            $suppliesWholeBasket = $matchedCount >= count(array_unique($productIds));
-            $avgStockConfidence = $stockScoreAccum / $matchedCount;
-
-            $evaluatedOutlets[] = [
-                'outlet' => $outlet,
-                'distance_km' => $distanceKm,
-                'supplies_whole_basket' => $suppliesWholeBasket,
-                'avg_stock_confidence' => $avgStockConfidence,
-                'usd_price_sum' => $usdPricesSum,
-                'basket_items' => $basketItems,
-            ];
-        }
-
-        // Expanding radius search: 25 km -> 50 km -> 100 km -> same Province
         /** @var list<int> $radii */
         $radii = config('betterlink.outlets.search_radii_km', [25, 50, 100]);
         $filtered = [];
         $radiusUsedLabel = '25 km';
 
-        foreach ($radii as $radiusKm) {
-            $within = array_filter(
-                $evaluatedOutlets,
-                fn (array $item) => $item['distance_km'] <= (float) $radiusKm
-            );
-            if ($within !== []) {
-                $filtered = array_values($within);
-                $radiusUsedLabel = "{$radiusKm} km";
-                break;
-            }
-        }
+        $isPostgis = DB::getDriverName() === 'pgsql';
 
-        if ($filtered === [] && $farmerProvinceId !== null) {
-            $inProvince = array_filter(
-                $evaluatedOutlets,
-                fn (array $item) => (string) $item['outlet']->province_id === (string) $farmerProvinceId
+        if ($isPostgis) {
+            // Execute real PostGIS ST_DWithin and ST_Distance queries per expanding radius
+            foreach ($radii as $radiusKm) {
+                $radiusMeters = (float) ($radiusKm * 1000);
+                $postgisOutlets = Outlet::withoutGlobalScopes()
+                    ->with(['ward', 'district'])
+                    ->select([
+                        'outlets.*',
+                        DB::raw(sprintf(
+                            'ST_Distance(location_point, ST_SetSRID(ST_MakePoint(%F, %F), 4326)::geography) / 1000.0 AS postgis_distance_km',
+                            $farmerLng,
+                            $farmerLat
+                        )),
+                    ])
+                    ->where('tenant_id', '=', $tenant->id)
+                    ->where('is_active', '=', true)
+                    ->whereNotNull('location_point')
+                    ->whereRaw(
+                        'ST_DWithin(location_point, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ?)',
+                        [$farmerLng, $farmerLat, $radiusMeters]
+                    )
+                    ->get();
+
+                $evaluated = $this->evaluateCandidateOutlets(
+                    $postgisOutlets,
+                    $productIds,
+                    $freshnessHours,
+                    $farmerLat,
+                    $farmerLng,
+                    true
+                );
+
+                if ($evaluated !== []) {
+                    $filtered = $evaluated;
+                    $radiusUsedLabel = "{$radiusKm} km";
+                    break;
+                }
+            }
+
+            if ($filtered === [] && $farmerProvinceId !== null) {
+                $provOutlets = Outlet::withoutGlobalScopes()
+                    ->with(['ward', 'district'])
+                    ->select([
+                        'outlets.*',
+                        DB::raw(sprintf(
+                            'ST_Distance(location_point, ST_SetSRID(ST_MakePoint(%F, %F), 4326)::geography) / 1000.0 AS postgis_distance_km',
+                            $farmerLng,
+                            $farmerLat
+                        )),
+                    ])
+                    ->where('tenant_id', '=', $tenant->id)
+                    ->where('is_active', '=', true)
+                    ->where('province_id', '=', $farmerProvinceId)
+                    ->get();
+
+                $evaluated = $this->evaluateCandidateOutlets(
+                    $provOutlets,
+                    $productIds,
+                    $freshnessHours,
+                    $farmerLat,
+                    $farmerLng,
+                    true
+                );
+
+                if ($evaluated !== []) {
+                    $filtered = $evaluated;
+                    $radiusUsedLabel = 'province';
+                }
+            }
+        } else {
+            // Non-PostGIS fallback (e.g., SQLite in-memory tests)
+            $candidateOutlets = Outlet::withoutGlobalScopes()
+                ->with(['ward', 'district'])
+                ->where('tenant_id', '=', $tenant->id)
+                ->where('is_active', '=', true)
+                ->get();
+
+            $evaluatedOutlets = $this->evaluateCandidateOutlets(
+                $candidateOutlets,
+                $productIds,
+                $freshnessHours,
+                $farmerLat,
+                $farmerLng,
+                false
             );
-            if ($inProvince !== []) {
-                $filtered = array_values($inProvince);
-                $radiusUsedLabel = 'province';
+
+            foreach ($radii as $radiusKm) {
+                $within = array_filter(
+                    $evaluatedOutlets,
+                    fn (array $item) => $item['distance_km'] <= (float) $radiusKm
+                );
+                if ($within !== []) {
+                    $filtered = array_values($within);
+                    $radiusUsedLabel = "{$radiusKm} km";
+                    break;
+                }
+            }
+
+            if ($filtered === [] && $farmerProvinceId !== null) {
+                $inProvince = array_filter(
+                    $evaluatedOutlets,
+                    fn (array $item) => (string) $item['outlet']->province_id === (string) $farmerProvinceId
+                );
+                if ($inProvince !== []) {
+                    $filtered = array_values($inProvince);
+                    $radiusUsedLabel = 'province';
+                }
             }
         }
 
@@ -208,6 +202,7 @@ final class OutletFinderService
                     'product_ids' => $productIds,
                     'outlets_found' => 0,
                     'fallback_required' => true,
+                    'spatial_engine' => $isPostgis ? 'postgis_st_dwithin' : 'haversine_fallback',
                 ],
                 'created_at' => now(),
             ]);
@@ -298,6 +293,7 @@ final class OutletFinderService
                 'product_ids' => $productIds,
                 'radius_used' => $radiusUsedLabel,
                 'top_outlet_ids' => array_map(fn (RankedOutletResultData $r) => $r->outletId, $top3),
+                'spatial_engine' => $isPostgis ? 'postgis_st_dwithin' : 'haversine_fallback',
             ],
             'created_at' => now(),
         ]);
@@ -307,6 +303,114 @@ final class OutletFinderService
             'outlets' => $top3,
             'fallback_required' => false,
         ];
+    }
+
+    /**
+     * @param Collection<int, Outlet> $outlets
+     * @param list<string> $productIds
+     * @return list<array<string, mixed>>
+     */
+    private function evaluateCandidateOutlets(
+        Collection $outlets,
+        array $productIds,
+        int $freshnessHours,
+        float $farmerLat,
+        float $farmerLng,
+        bool $usePostgisDistanceColumn
+    ): array {
+        $evaluated = [];
+
+        foreach ($outlets as $outlet) {
+            $authorisedProductIds = OutletProductAuthorisation::withoutGlobalScopes()
+                ->where('outlet_id', '=', $outlet->id)
+                ->whereIn('product_id', $productIds)
+                ->where('is_authorised', '=', true)
+                ->pluck('product_id')
+                ->map(fn ($id) => (string) $id)
+                ->all();
+
+            if ($authorisedProductIds === []) {
+                continue;
+            }
+
+            $stockRows = OutletStock::withoutGlobalScopes()
+                ->with('product')
+                ->where('outlet_id', '=', $outlet->id)
+                ->whereIn('product_id', $authorisedProductIds)
+                ->where('quantity_band', '!=', StockQuantityBand::OUT_OF_STOCK->value)
+                ->get();
+
+            if ($stockRows->isEmpty()) {
+                continue;
+            }
+
+            $distanceKm = ($usePostgisDistanceColumn && $outlet->getAttribute('postgis_distance_km') !== null)
+                ? (float) $outlet->getAttribute('postgis_distance_km')
+                : $this->haversineDistanceKm(
+                    $farmerLat,
+                    $farmerLng,
+                    (float) $outlet->latitude,
+                    (float) $outlet->longitude
+                );
+
+            $groupedByProduct = $stockRows->groupBy('product_id');
+            $basketItems = [];
+            $stockScoreAccum = 0.0;
+            $usdPricesSum = 0.0;
+
+            foreach ($groupedByProduct as $prodId => $rows) {
+                $firstRow = $rows->first();
+                if ($firstRow === null) {
+                    continue;
+                }
+
+                $usdRow = $rows->firstWhere('currency', CurrencyCode::USD);
+                $zigRow = $rows->firstWhere('currency', CurrencyCode::ZIG);
+
+                $isFresh = $firstRow->isFresh($freshnessHours);
+                $bandScore = $firstRow->quantity_band->confidenceScore();
+                $freshnessMultiplier = $isFresh ? 1.0 : 0.45;
+                $stockScoreAccum += ($bandScore * $freshnessMultiplier);
+
+                $priceUsd = $usdRow !== null ? (float) $usdRow->price : null;
+                $priceZig = $zigRow !== null ? (float) $zigRow->price : null;
+                if ($priceUsd !== null) {
+                    $usdPricesSum += $priceUsd;
+                }
+
+                $basketItems[] = [
+                    'product_id' => (string) $prodId,
+                    'sku' => (string) ($firstRow->product?->sku ?? ''),
+                    'product_name' => (string) ($firstRow->product?->name ?? 'Product'),
+                    'pack_size' => (string) $firstRow->pack_size,
+                    'quantity_band' => $firstRow->quantity_band->value,
+                    'price_usd' => $priceUsd,
+                    'price_zig' => $priceZig,
+                    'is_fresh' => $isFresh,
+                    'last_updated_human' => $firstRow->last_updated_at?->diffForHumans() ?? 'unknown',
+                    'stale_warning' => $isFresh ? null : 'Stock last updated >48h ago — please call to confirm.',
+                ];
+            }
+
+            $matchedCount = count($basketItems);
+            if ($matchedCount === 0) {
+                continue;
+            }
+
+            $suppliesWholeBasket = $matchedCount >= count(array_unique($productIds));
+            $avgStockConfidence = $stockScoreAccum / $matchedCount;
+
+            $evaluated[] = [
+                'outlet' => $outlet,
+                'distance_km' => $distanceKm,
+                'supplies_whole_basket' => $suppliesWholeBasket,
+                'avg_stock_confidence' => $avgStockConfidence,
+                'usd_price_sum' => $usdPricesSum,
+                'basket_items' => $basketItems,
+            ];
+        }
+
+        return $evaluated;
     }
 
     /**

@@ -20,6 +20,17 @@ class Conversation extends Model
     use HasUuids;
     use SoftDeletes;
 
+    /**
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'channel' => 'whatsapp',
+        'state' => 'CONSENT_CHECK',
+        'mode' => 'ai_active',
+        'language' => 'en',
+        'poor_photo_retries' => 0,
+    ];
+
     protected $fillable = [
         'tenant_id',
         'farmer_id',
@@ -33,6 +44,7 @@ class Conversation extends Model
         'pending_message_buffer_json',
         'context_metadata_json',
         'assigned_user_id',
+        'active_farm_plan_id',
         'state_updated_at',
         'last_message_at',
     ];
@@ -94,5 +106,10 @@ class Conversation extends Model
     public function diagnoses(): HasMany
     {
         return $this->hasMany(Diagnosis::class);
+    }
+
+    public function activeFarmPlan(): BelongsTo
+    {
+        return $this->belongsTo(FarmPlan::class, 'active_farm_plan_id');
     }
 }

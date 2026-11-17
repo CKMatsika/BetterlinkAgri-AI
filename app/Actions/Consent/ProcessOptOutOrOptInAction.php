@@ -8,6 +8,7 @@ use App\Enums\ConversationState;
 use App\Enums\LanguageCode;
 use App\Models\AuditLog;
 use App\Models\Consent;
+use App\Models\ConsentEvent;
 use App\Models\Conversation;
 use App\Models\Farmer;
 
@@ -57,6 +58,18 @@ final class ProcessOptOutOrOptInAction
                 'revoked_at' => now(),
             ]
         );
+
+        foreach (['cdpa_processing', 'marketing'] as $scope) {
+            ConsentEvent::record(
+                tenantId: $conversation->tenant_id,
+                farmerId: $farmer->id,
+                scope: $scope,
+                action: 'revoked',
+                channel: $conversation->channel,
+                source: 'opt_out_keyword',
+                metadata: ['keyword' => strtoupper(trim($keywordUsed))]
+            );
+        }
 
         $conversation->update([
             'state' => ConversationState::OPTED_OUT,

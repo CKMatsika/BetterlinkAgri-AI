@@ -56,7 +56,7 @@ final class ApplicationRateCalculator
         $inRowMeters = max(0.05, $inRowCm / 100.0);
         $plantPopPerHa = (int) round(10000.0 / ($rowMeters * $inRowMeters));
 
-        $pfumvudzaStationsPerPlot = (int) config('betterlink.agronomy.pfumvudza_standard_stations', 1456);
+        $pfumvudzaStationsPerPlot = (int) config('betterlink.agronomy.pfumvudza_standard_stations.value', 1456);
         $bagSizeKg = (float) config('betterlink.agronomy.standard_fertiliser_bag_kg', 50);
 
         $effectivePlots = $pfumvudzaPlotsCount !== null && $pfumvudzaPlotsCount > 0 ? $pfumvudzaPlotsCount : 1;

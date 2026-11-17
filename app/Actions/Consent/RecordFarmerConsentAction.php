@@ -7,6 +7,7 @@ namespace App\Actions\Consent;
 use App\Enums\LanguageCode;
 use App\Models\AuditLog;
 use App\Models\Consent;
+use App\Models\ConsentEvent;
 use App\Models\Conversation;
 use App\Models\Farmer;
 
@@ -17,6 +18,8 @@ final class RecordFarmerConsentAction
         Farmer $farmer,
         bool $marketingConsent = true
     ): Consent {
+        $policyVersion = (string) config('betterlink.cdpa.current_policy_version', '2026.1');
+
         $consent = Consent::query()->updateOrCreate(
             [
                 'tenant_id' => $conversation->tenant_id,
@@ -27,11 +30,31 @@ final class RecordFarmerConsentAction
                 'status' => 'opted_in',
                 'data_processing_consent' => true,
                 'marketing_consent' => $marketingConsent,
-                'policy_version' => (string) config('betterlink.cdpa.current_policy_version', '2026.1'),
+                'policy_version' => $policyVersion,
                 'opt_out_keyword_used' => null,
                 'consented_at' => now(),
                 'revoked_at' => null,
             ]
+        );
+
+        ConsentEvent::record(
+            tenantId: $conversation->tenant_id,
+            farmerId: $farmer->id,
+            scope: 'cdpa_processing',
+            action: 'granted',
+            channel: $conversation->channel,
+            source: 'farmer_reply',
+            termsVersion: $policyVersion
+        );
+
+        ConsentEvent::record(
+            tenantId: $conversation->tenant_id,
+            farmerId: $farmer->id,
+            scope: 'marketing',
+            action: $marketingConsent ? 'granted' : 'revoked',
+            channel: $conversation->channel,
+            source: 'farmer_reply',
+            termsVersion: $policyVersion
         );
 
         AuditLog::query()->create([

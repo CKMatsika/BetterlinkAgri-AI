@@ -2,14 +2,22 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Api\V1\FarmPlannerController;
 use App\Http\Controllers\Api\V1\FarmerPrivacyController;
 use App\Http\Controllers\Api\V1\OutletPortalApiController;
+use App\Http\Controllers\Api\V1\PlannerAuthController;
 use App\Http\Controllers\Api\V1\SmsUssdWebhookController;
 use App\Http\Controllers\Api\V1\WebChatController;
 use App\Http\Controllers\Api\V1\WhatsAppWebhookController;
+use App\Support\ProductionDatabaseGuard;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->name('api.v1.')->group(function (): void {
+    Route::get('/health', function () {
+        $status = ProductionDatabaseGuard::status();
+
+        return response()->json($status, $status['ok'] ? 200 : 503);
+    })->name('health');
     // 1. WhatsApp Cloud API Webhooks (Signature verification + Redis Idempotency)
     Route::get('/webhooks/whatsapp', [WhatsAppWebhookController::class, 'verify'])
         ->name('webhooks.whatsapp.verify');
@@ -35,6 +43,32 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
 
     Route::post('/reservations/{reservationId}/respond', [OutletPortalApiController::class, 'respondToReservation'])
         ->name('reservations.respond');
+
+    // 4b. Web Farmer Planner Portal Endpoints (P1b + Phone OTP Auth + IDOR & Per-Farmer Rate Limiting)
+    Route::prefix('planner')->name('planner.')->group(function (): void {
+        Route::get('/enterprises', [FarmPlannerController::class, 'enterprises'])->name('enterprises');
+
+        Route::prefix('auth')->name('auth.')->group(function (): void {
+            Route::post('/request-otp', [PlannerAuthController::class, 'requestOtp'])
+                ->middleware('throttle:planner-otp')
+                ->name('request_otp');
+            Route::post('/verify-otp', [PlannerAuthController::class, 'verifyOtp'])
+                ->middleware('throttle:planner-otp')
+                ->name('verify_otp');
+            Route::post('/logout', [PlannerAuthController::class, 'logout'])
+                ->name('logout');
+        });
+
+        Route::middleware(['planner.auth', 'throttle:planner-api'])->group(function (): void {
+            Route::get('/plans', [FarmPlannerController::class, 'index'])->name('plans.index');
+            Route::post('/plans', [FarmPlannerController::class, 'store'])->name('plans.store');
+            Route::get('/plans/{plan}', [FarmPlannerController::class, 'show'])->name('plans.show');
+            Route::post('/plans/{plan}/answer', [FarmPlannerController::class, 'answer'])->name('plans.answer');
+            Route::post('/plans/{plan}/what-if', [FarmPlannerController::class, 'whatIf'])->name('plans.what_if');
+            Route::post('/plans/{plan}/accept', [FarmPlannerController::class, 'accept'])->name('plans.accept');
+            Route::get('/plans/{plan}/pdf', [FarmPlannerController::class, 'pdf'])->name('plans.pdf');
+        });
+    });
 
     // 5. Tenant-Scoped Protected Endpoints (CDPA Data Export & Right to Erasure)
     Route::middleware(['auth:sanctum', 'tenant.resolve'])->group(function (): void {

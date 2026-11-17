@@ -176,3 +176,15 @@ flowchart TB
    - Full JSON data export and right-to-erasure anonymization endpoints.
 3. **Immutable Audit Trail (`audit_logs`)**:
    - Every state machine transition and every AI response logs the input image SHA-256 hash, vision candidates JSON, clarifying questions asked, deterministic tool payloads, RAG chunk IDs, guardrail verification result, and model token/latency telemetry.
+
+
+---
+
+## AI Embeddings, Vector Dimensions & Re-Embedding Procedure
+
+- **Default Embedding Provider**: `voyage` (`AI_EMBEDDING_PROVIDER=voyage`, model `VOYAGE_EMBEDDING_MODEL=voyage-3`).
+- **Configured Vector Dimension**: `PGVECTOR_DIMENSION=1024` (matches `knowledge_chunks.embedding vector(1024)` and the HNSW cosine index `idx_knowledge_chunks_embedding_hnsw`).
+- **Changing the Embedding Model / Dimension**:
+  1. Update `AI_EMBEDDING_PROVIDER`, the model ID (`VOYAGE_EMBEDDING_MODEL` / `OPENAI_EMBEDDING_MODEL`), and `PGVECTOR_DIMENSION` in `.env` and `config/betterlink.php`.
+  2. Create a migration altering `knowledge_chunks.embedding` to `vector(<NEW_DIM>)` and rebuilding the HNSW index.
+  3. Clear old vectors and re-run document ingestion (`IngestProductDocumentJob` / `php artisan rag:reembed`) for every active `ProductDocument` before re-enabling RAG queries.

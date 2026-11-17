@@ -9,6 +9,11 @@ use App\Enums\LanguageCode;
 /**
  * Zimbabwean Trilingual Agronomy Glossary (English, ChiShona, isiNdebele)
  * and Per-Message Language Detector.
+ *
+ * TRANSLATION STATUS:
+ * - 'en': reviewed
+ * - 'sn' (ChiShona): NEEDS NATIVE REVIEW (gated by betterlink.localization.enable_sn_nd)
+ * - 'nd' (isiNdebele): NEEDS NATIVE REVIEW (gated by betterlink.localization.enable_sn_nd)
  */
 final class ZimbabweAgronomyGlossary
 {
