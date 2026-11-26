@@ -14,6 +14,7 @@ use App\Models\MarketplaceRequest;
 use App\Models\Offer;
 use App\Models\OrderEvent;
 use App\Models\RequestRecipient;
+use App\Models\SaleEvent;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 
@@ -209,6 +210,107 @@ final class MarketplaceOfferAndOrderService
             $this->alertDispatcher->broadcastCounters($request->id, $this->broadcastService->liveCounters($request->fresh()));
 
             return $order;
+        });
+    }
+
+    /**
+     * Complete a marketplace order: transitions order -> completed, parent request -> COMPLETED,
+     * appends OrderEvent, and emits anonymised SaleEvent rows (zero farmer PII).
+     */
+    public function completeOrder(MarketplaceOrder $order, ?string $actorUserId = null): MarketplaceOrder
+    {
+        return DB::transaction(function () use ($order, $actorUserId): MarketplaceOrder {
+            /** @var MarketplaceOrder $lockedOrder */
+            $lockedOrder = MarketplaceOrder::withoutGlobalScopes()
+                ->where('id', '=', $order->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($lockedOrder->status === 'completed') {
+                return $lockedOrder;
+            }
+
+            if (!in_array($lockedOrder->status, ['created', 'confirmed', 'ready_for_pickup', 'dispatched'], true)) {
+                throw new DomainException('Cannot complete order in status ' . $lockedOrder->status);
+            }
+
+            $fromStatus = $lockedOrder->status;
+            $lockedOrder->update([
+                'status' => 'completed',
+                'payment_status' => 'paid',
+                'completed_at' => now(),
+            ]);
+
+            OrderEvent::query()->create([
+                'order_id' => $lockedOrder->id,
+                'actor_type' => 'retailer',
+                'actor_id' => $actorUserId ?? $lockedOrder->organisation_id,
+                'event_type' => 'order_completed',
+                'from_status' => $fromStatus,
+                'to_status' => 'completed',
+                'metadata_json' => [
+                    'organisation_id' => $lockedOrder->organisation_id,
+                    'outlet_id' => $lockedOrder->outlet_id,
+                ],
+                'created_at' => now(),
+            ]);
+
+            $request = MarketplaceRequest::withoutGlobalScopes()
+                ->with(['items'])
+                ->findOrFail($lockedOrder->request_id);
+
+            if ($request->status === MarketplaceRequestStatus::OFFER_ACCEPTED) {
+                $this->stateMachine->transitionTo($request, MarketplaceRequestStatus::FULFILMENT, 'order_fulfilment_started', [
+                    'order_id' => $lockedOrder->id,
+                ]);
+                $request = $request->fresh();
+            }
+
+            if ($request->status === MarketplaceRequestStatus::FULFILMENT) {
+                $this->stateMachine->transitionTo($request, MarketplaceRequestStatus::COMPLETED, 'order_completed', [
+                    'order_id' => $lockedOrder->id,
+                ]);
+            }
+
+            // Emit anonymised SaleEvent rows (intentionally no farmer_id / farmer PII)
+            $items = $request->items;
+            $itemCount = max(1, $items->count());
+            $perItemAmount = (int) intdiv((int) $lockedOrder->total_amount_minor, $itemCount);
+            $remainder = (int) $lockedOrder->total_amount_minor - ($perItemAmount * $itemCount);
+
+            if ($items->isEmpty()) {
+                SaleEvent::withoutGlobalScopes()->create([
+                    'order_id' => $lockedOrder->id,
+                    'organisation_id' => $lockedOrder->organisation_id,
+                    'outlet_id' => $lockedOrder->outlet_id,
+                    'product_id' => null,
+                    'category' => 'general',
+                    'district_id' => $request->district_id,
+                    'ward_id' => $request->ward_id,
+                    'quantity_scaled' => 100,
+                    'total_amount_minor' => (int) $lockedOrder->total_amount_minor,
+                    'currency' => $lockedOrder->currency,
+                    'occurred_at' => now(),
+                ]);
+            } else {
+                foreach ($items->values() as $idx => $item) {
+                    SaleEvent::withoutGlobalScopes()->create([
+                        'order_id' => $lockedOrder->id,
+                        'organisation_id' => $lockedOrder->organisation_id,
+                        'outlet_id' => $lockedOrder->outlet_id,
+                        'product_id' => $item->product_id,
+                        'category' => $item->category,
+                        'district_id' => $request->district_id,
+                        'ward_id' => $request->ward_id,
+                        'quantity_scaled' => (int) $item->quantity_scaled,
+                        'total_amount_minor' => $perItemAmount + ($idx === 0 ? $remainder : 0),
+                        'currency' => $lockedOrder->currency,
+                        'occurred_at' => now(),
+                    ]);
+                }
+            }
+
+            return $lockedOrder->fresh();
         });
     }
 }

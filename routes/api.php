@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Api\V1\FarmPlannerController;
 use App\Http\Controllers\Api\V1\FarmerPrivacyController;
+use App\Http\Controllers\Api\V1\MarketplaceIntelligenceController;
 use App\Http\Controllers\Api\V1\MarketplaceRequestController;
 use App\Http\Controllers\Api\V1\OutletPortalApiController;
 use App\Http\Controllers\Api\V1\PlannerAuthController;
@@ -88,6 +89,10 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/outlet/alerts', [MarketplaceRequestController::class, 'outletAlerts'])->name('outlet.alerts');
             Route::post('/recipients/{recipientId}/opened', [MarketplaceRequestController::class, 'markOpened'])->name('recipients.opened');
             Route::post('/recipients/{recipientId}/respond', [MarketplaceRequestController::class, 'respond'])->name('recipients.respond');
+            Route::post('/orders/{orderId}/complete', [MarketplaceIntelligenceController::class, 'completeOrder'])->name('orders.complete');
+            Route::get('/intelligence/demand', [MarketplaceIntelligenceController::class, 'demand'])->name('intelligence.demand');
+            Route::get('/intelligence/stock-signals', [MarketplaceIntelligenceController::class, 'stockSignals'])->name('intelligence.stock_signals');
+            Route::get('/intelligence/upstream-requests', [MarketplaceIntelligenceController::class, 'upstreamRequests'])->name('intelligence.upstream_requests');
         });
     });
 
