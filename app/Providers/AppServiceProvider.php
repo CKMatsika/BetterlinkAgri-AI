@@ -19,6 +19,7 @@ use App\Services\Ai\Voice\VoiceTranscriptionService;
 use App\Services\Channels\LogWhatsAppChannel;
 use App\Services\Channels\WhatsAppCloudService;
 use App\Services\Weather\ZimbabweWeatherService;
+use App\Support\MarketplaceContext;
 use App\Support\ProductionDatabaseGuard;
 use App\Support\TenantContext;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -34,6 +35,7 @@ final class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(TenantContext::class, fn () => new TenantContext());
+        $this->app->singleton(MarketplaceContext::class, fn () => new MarketplaceContext());
 
         $this->app->bind(MessagingChannelContract::class, function ($app) {
             $hasCreds = trim((string) config('betterlink.whatsapp.access_token', '')) !== ''
@@ -87,6 +89,11 @@ final class AppServiceProvider extends ServiceProvider
         Queue::before(function (): void {
             ProductionDatabaseGuard::assertReady();
         });
+
+        \Illuminate\Support\Facades\Gate::policy(\App\Models\MarketplaceRequest::class, \App\Policies\MarketplaceRequestPolicy::class);
+        \Illuminate\Support\Facades\Gate::policy(\App\Models\Offer::class, \App\Policies\OfferPolicy::class);
+        \Illuminate\Support\Facades\Gate::policy(\App\Models\MarketplaceOrder::class, \App\Policies\MarketplaceOrderPolicy::class);
+        \Illuminate\Support\Facades\Gate::policy(\App\Models\DemandAggregate::class, \App\Policies\DemandAggregatePolicy::class);
 
         RateLimiter::for('planner-api', function (Request $request) {
             $farmerId = $request->attributes->get('planner_farmer_id');

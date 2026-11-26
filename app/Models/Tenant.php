@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\OrganisationType;
 use App\Enums\RecommendationScope;
 use App\Enums\TenantType;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -22,6 +23,7 @@ class Tenant extends Model
         'name',
         'slug',
         'tenant_type',
+        'organisation_type',
         'recommendation_scope',
         'whatsapp_phone_number_id',
         'whatsapp_business_account_id',
@@ -32,12 +34,14 @@ class Tenant extends Model
         'outlet_ranking_weights',
         'crm_config',
         'is_active',
+        'upstream_data_sharing_consented_at',
     ];
 
     protected function casts(): array
     {
         return [
             'tenant_type' => TenantType::class,
+            'organisation_type' => OrganisationType::class,
             'recommendation_scope' => RecommendationScope::class,
             'whatsapp_access_token_encrypted' => 'encrypted',
             'usd_to_zig_rate' => 'decimal:4',
@@ -46,6 +50,7 @@ class Tenant extends Model
             'outlet_ranking_weights' => 'array',
             'crm_config' => 'array',
             'is_active' => 'boolean',
+            'upstream_data_sharing_consented_at' => 'datetime',
         ];
     }
 
