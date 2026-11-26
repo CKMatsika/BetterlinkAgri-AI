@@ -25,7 +25,8 @@ use Illuminate\Support\Facades\DB;
 final class MarketplaceBroadcastService
 {
     public function __construct(
-        private readonly MarketplaceRequestStateMachine $stateMachine
+        private readonly MarketplaceRequestStateMachine $stateMachine,
+        private readonly RetailerAlertDispatcher $alertDispatcher
     ) {
     }
 
@@ -133,6 +134,12 @@ final class MarketplaceBroadcastService
                 ->delay($request->fresh()->expires_at ?? $now->copy()->addHours($lifetimeHours));
         }
 
+        // Dispatch real-time Reverb alerts + WhatsApp/SMS retailer alerts & live counters
+        foreach ($createdRecipients as $recipient) {
+            $this->alertDispatcher->dispatchRecipientAlert($request, $recipient);
+        }
+        $this->alertDispatcher->broadcastCounters($request->id, $this->liveCounters($request->fresh()));
+
         return $createdRecipients;
     }
 
@@ -151,8 +158,10 @@ final class MarketplaceBroadcastService
         }
 
         $request = MarketplaceRequest::withoutGlobalScopes()->findOrFail($recipient->request_id);
+        $counters = $this->liveCounters($request);
+        $this->alertDispatcher->broadcastCounters($request->id, $counters);
 
-        return $this->liveCounters($request);
+        return $counters;
     }
 
     /**

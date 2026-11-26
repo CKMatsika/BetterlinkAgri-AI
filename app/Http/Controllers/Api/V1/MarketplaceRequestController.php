@@ -25,6 +25,20 @@ final class MarketplaceRequestController
     ) {
     }
 
+    public function index(Request $request): JsonResponse
+    {
+        $farmerId = (string) $request->attributes->get('planner_farmer_id', '');
+
+        $requests = MarketplaceRequest::withoutGlobalScopes()
+            ->with('items')
+            ->where('farmer_id', '=', $farmerId)
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get();
+
+        return response()->json(['requests' => $requests]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $farmerId = (string) $request->attributes->get('planner_farmer_id', '');
@@ -117,6 +131,61 @@ final class MarketplaceRequestController
             'counters' => $this->broadcastService->liveCounters($marketRequest),
             'offers' => $offers,
         ]);
+    }
+
+    public function counters(Request $request, string $marketplaceRequestId): JsonResponse
+    {
+        $farmerId = (string) $request->attributes->get('planner_farmer_id', '');
+        $marketRequest = MarketplaceRequest::withoutGlobalScopes()->findOrFail($marketplaceRequestId);
+
+        if ($marketRequest->farmer_id !== $farmerId) {
+            abort(403, 'You do not have access to this request.');
+        }
+
+        return response()->json([
+            'request_id' => $marketRequest->id,
+            'counters' => $this->broadcastService->liveCounters($marketRequest),
+        ]);
+    }
+
+    public function outletAlerts(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if ($user === null || $user->tenant_id === null) {
+            abort(403, 'Outlet organisation context required.');
+        }
+
+        $alerts = RequestRecipient::withoutGlobalScopes()
+            ->with(['request.items', 'outlet'])
+            ->where('organisation_id', '=', $user->tenant_id)
+            ->orderByDesc('notified_at')
+            ->limit(50)
+            ->get()
+            ->map(function (RequestRecipient $r): array {
+                $req = $r->request;
+
+                return [
+                    'recipient_id' => $r->id,
+                    'request_id' => $r->request_id,
+                    'outlet_id' => $r->outlet_id,
+                    'outlet_name' => $r->outlet?->name,
+                    'ring_number' => $r->ring_number,
+                    'distance_band' => $r->distance_band,
+                    'status' => $req?->status?->value,
+                    'needed_by_date' => $req?->needed_by_date?->toDateString(),
+                    'expires_at' => $req?->expires_at?->toIso8601String(),
+                    'notified_at' => $r->notified_at?->toIso8601String(),
+                    'opened_at' => $r->opened_at?->toIso8601String(),
+                    'response' => $r->response,
+                    'items' => $req ? $req->items->map(fn ($i) => [
+                        'item_name' => $i->item_name,
+                        'quantity_scaled' => $i->quantity_scaled,
+                        'unit' => $i->unit,
+                    ])->values()->all() : [],
+                ];
+            });
+
+        return response()->json(['alerts' => $alerts]);
     }
 
     public function acceptOffer(Request $request, string $marketplaceRequestId, string $offerId): JsonResponse

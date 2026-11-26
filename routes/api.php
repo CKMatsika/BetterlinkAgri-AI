@@ -71,15 +71,18 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         });
     });
 
-    // 4c. Marketplace Core Loop Endpoints (M1b)
+    // 4c. Marketplace Core Loop & Outlet Portal Live Alerts Endpoints (M1b + M1c)
     Route::prefix('marketplace')->name('marketplace.')->group(function (): void {
         Route::middleware(['planner.auth', 'throttle:planner-api'])->group(function (): void {
+            Route::get('/requests', [MarketplaceRequestController::class, 'index'])->name('requests.index');
             Route::post('/requests', [MarketplaceRequestController::class, 'store'])->name('requests.store');
             Route::get('/requests/{marketplaceRequestId}', [MarketplaceRequestController::class, 'show'])->name('requests.show');
+            Route::get('/requests/{marketplaceRequestId}/counters', [MarketplaceRequestController::class, 'counters'])->name('requests.counters');
             Route::post('/requests/{marketplaceRequestId}/offers/{offerId}/accept', [MarketplaceRequestController::class, 'acceptOffer'])->name('requests.accept_offer');
         });
 
         Route::middleware(['auth:sanctum'])->group(function (): void {
+            Route::get('/outlet/alerts', [MarketplaceRequestController::class, 'outletAlerts'])->name('outlet.alerts');
             Route::post('/recipients/{recipientId}/opened', [MarketplaceRequestController::class, 'markOpened'])->name('recipients.opened');
             Route::post('/recipients/{recipientId}/respond', [MarketplaceRequestController::class, 'respond'])->name('recipients.respond');
         });

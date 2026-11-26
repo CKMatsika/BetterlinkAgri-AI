@@ -12,3 +12,4 @@ Route::get('/', fn () => response()->json([
 
 Route::get('/widget-demo', fn () => view('widget.demo'))->name('widget.demo');
 Route::get('/planner', fn () => view('planner.index'))->name('planner.index');
+Route::get('/marketplace', fn () => view('marketplace.index'))->name('marketplace.index');

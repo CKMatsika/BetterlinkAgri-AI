@@ -21,7 +21,9 @@ final class MarketplaceOfferAndOrderService
 {
     public function __construct(
         private readonly MarketplaceRequestStateMachine $stateMachine,
-        private readonly OfferRankingService $rankingService
+        private readonly OfferRankingService $rankingService,
+        private readonly MarketplaceBroadcastService $broadcastService,
+        private readonly RetailerAlertDispatcher $alertDispatcher
     ) {
     }
 
@@ -88,6 +90,7 @@ final class MarketplaceOfferAndOrderService
         });
 
         $this->rankingService->rankForRequest($request->fresh());
+        $this->alertDispatcher->broadcastCounters($request->id, $this->broadcastService->liveCounters($request->fresh()));
 
         return $offer->fresh();
     }
@@ -198,6 +201,12 @@ final class MarketplaceOfferAndOrderService
                 ],
                 'created_at' => now(),
             ]);
+
+            $this->alertDispatcher->broadcastOfferStatus($freshOffer->fresh());
+            foreach ($competingOffers as $losingOffer) {
+                $this->alertDispatcher->broadcastOfferStatus($losingOffer->fresh());
+            }
+            $this->alertDispatcher->broadcastCounters($request->id, $this->broadcastService->liveCounters($request->fresh()));
 
             return $order;
         });

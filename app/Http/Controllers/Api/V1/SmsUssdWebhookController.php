@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Contracts\MessagingChannelContract;
 use App\Enums\ConversationMode;
 use App\Enums\ConversationState;
 use App\Models\Conversation;
@@ -11,6 +12,7 @@ use App\Models\Farmer;
 use App\Models\Message;
 use App\Models\Tenant;
 use App\Services\Diagnosis\ConversationStateMachine;
+use App\Services\Marketplace\MarketplaceUssdSmsHandler;
 use App\Support\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,7 +26,9 @@ final class SmsUssdWebhookController
 {
     public function __construct(
         private readonly TenantContext $tenantContext,
-        private readonly ConversationStateMachine $stateMachine
+        private readonly ConversationStateMachine $stateMachine,
+        private readonly MarketplaceUssdSmsHandler $marketplaceHandler,
+        private readonly MessagingChannelContract $messagingChannel
     ) {
     }
 
@@ -70,6 +74,19 @@ final class SmsUssdWebhookController
                 'message_type' => 'text',
                 'body_text' => (string) $validated['text'],
             ]);
+
+            if ($this->marketplaceHandler->canHandle((string) $validated['text'])) {
+                $marketReply = $this->marketplaceHandler->handle($tenant, $farmer, (string) $validated['text'], $channel);
+                $this->messagingChannel->sendText($conversation, $marketReply['reply_text']);
+
+                return response()->json([
+                    'channel' => $channel,
+                    'state' => 'MARKETPLACE',
+                    'reply_text' => Str::limit($marketReply['reply_text'], 320),
+                    'request_id' => $marketReply['request_id'] ?? null,
+                    'order_id' => $marketReply['order_id'] ?? null,
+                ]);
+            }
 
             $turnResult = $this->stateMachine->handleInboundTurn($conversation, $message);
 
