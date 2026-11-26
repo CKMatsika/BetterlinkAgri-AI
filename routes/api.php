@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\FarmerPrivacyController;
 use App\Http\Controllers\Api\V1\MarketplaceIntelligenceController;
 use App\Http\Controllers\Api\V1\MarketplaceRequestController;
 use App\Http\Controllers\Api\V1\MarketplaceTrustController;
+use App\Http\Controllers\Api\V1\ServiceBookingController;
 use App\Http\Controllers\Api\V1\OutletPortalApiController;
 use App\Http\Controllers\Api\V1\PlannerAuthController;
 use App\Http\Controllers\Api\V1\SmsUssdWebhookController;
@@ -86,6 +87,10 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/plan-requirements/{requirementId}/activate', [MarketplaceRequestController::class, 'activatePlanRequirement'])->name('plan_requirements.activate');
             Route::post('/orders/{orderId}/rate', [MarketplaceTrustController::class, 'farmerRate'])->name('orders.farmer_rate');
             Route::post('/orders/{orderId}/dispute', [MarketplaceTrustController::class, 'farmerDispute'])->name('orders.farmer_dispute');
+            Route::get('/services/providers', [ServiceBookingController::class, 'nearbyProviders'])->name('services.providers');
+            Route::get('/bookings', [ServiceBookingController::class, 'farmerIndex'])->name('bookings.index');
+            Route::post('/bookings', [ServiceBookingController::class, 'store'])->name('bookings.store');
+            Route::post('/bookings/{bookingId}/cancel', [ServiceBookingController::class, 'farmerCancel'])->name('bookings.cancel');
         });
 
         Route::middleware(['auth:sanctum'])->group(function (): void {
@@ -98,6 +103,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/orders/{orderId}/dispute/resolve', [MarketplaceTrustController::class, 'resolveDispute'])->name('orders.dispute_resolve');
             Route::post('/seller-verifications', [MarketplaceTrustController::class, 'submitVerification'])->name('seller_verifications.submit');
             Route::post('/seller-verifications/{verificationId}/review', [MarketplaceTrustController::class, 'reviewVerification'])->name('seller_verifications.review');
+            Route::get('/provider/bookings', [ServiceBookingController::class, 'providerIndex'])->name('provider.bookings.index');
+            Route::post('/provider/bookings/{bookingId}/status', [ServiceBookingController::class, 'providerUpdateStatus'])->name('provider.bookings.status');
             Route::get('/intelligence/demand', [MarketplaceIntelligenceController::class, 'demand'])->name('intelligence.demand');
             Route::get('/intelligence/stock-signals', [MarketplaceIntelligenceController::class, 'stockSignals'])->name('intelligence.stock_signals');
             Route::get('/intelligence/upstream-requests', [MarketplaceIntelligenceController::class, 'upstreamRequests'])->name('intelligence.upstream_requests');
