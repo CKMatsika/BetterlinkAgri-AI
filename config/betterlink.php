@@ -220,6 +220,29 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Marketplace Engine (Rings, Timers, Deterministic Offer Ranking)
+    |--------------------------------------------------------------------------
+    */
+    'marketplace' => [
+        'rings_km' => array_map(
+            'intval',
+            explode(',', (string) env('MARKETPLACE_RINGS_KM', '10,25,50'))
+        ),
+        'ring_timeout_minutes' => (int) env('MARKETPLACE_RING_TIMEOUT_MINUTES', 10),
+        'min_offers_to_stop_expansion' => (int) env('MARKETPLACE_MIN_OFFERS', 1),
+        'request_lifetime_hours' => (int) env('MARKETPLACE_REQUEST_LIFETIME_HOURS', 24),
+        'require_verified_sellers' => (bool) env('MARKETPLACE_REQUIRE_VERIFIED_SELLERS', false),
+        'ranking_weights' => [
+            'price' => 35,
+            'distance' => 25,
+            'rating' => 20,
+            'stock_confidence' => 10,
+            'delivery' => 10,
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Farm Planning Engine Configuration
     |--------------------------------------------------------------------------
     */

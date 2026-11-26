@@ -67,7 +67,7 @@ return [
         ],
         'supervisor-notifications' => [
             'connection' => 'redis',
-            'queue' => ['notifications'],
+            'queue' => ['notifications', 'marketplace-timers'],
             'balance' => 'auto',
             'autoScalingStrategy' => 'time',
             'maxProcesses' => 6,

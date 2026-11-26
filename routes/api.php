@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Api\V1\FarmPlannerController;
 use App\Http\Controllers\Api\V1\FarmerPrivacyController;
+use App\Http\Controllers\Api\V1\MarketplaceRequestController;
 use App\Http\Controllers\Api\V1\OutletPortalApiController;
 use App\Http\Controllers\Api\V1\PlannerAuthController;
 use App\Http\Controllers\Api\V1\SmsUssdWebhookController;
@@ -67,6 +68,20 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/plans/{plan}/what-if', [FarmPlannerController::class, 'whatIf'])->name('plans.what_if');
             Route::post('/plans/{plan}/accept', [FarmPlannerController::class, 'accept'])->name('plans.accept');
             Route::get('/plans/{plan}/pdf', [FarmPlannerController::class, 'pdf'])->name('plans.pdf');
+        });
+    });
+
+    // 4c. Marketplace Core Loop Endpoints (M1b)
+    Route::prefix('marketplace')->name('marketplace.')->group(function (): void {
+        Route::middleware(['planner.auth', 'throttle:planner-api'])->group(function (): void {
+            Route::post('/requests', [MarketplaceRequestController::class, 'store'])->name('requests.store');
+            Route::get('/requests/{marketplaceRequestId}', [MarketplaceRequestController::class, 'show'])->name('requests.show');
+            Route::post('/requests/{marketplaceRequestId}/offers/{offerId}/accept', [MarketplaceRequestController::class, 'acceptOffer'])->name('requests.accept_offer');
+        });
+
+        Route::middleware(['auth:sanctum'])->group(function (): void {
+            Route::post('/recipients/{recipientId}/opened', [MarketplaceRequestController::class, 'markOpened'])->name('recipients.opened');
+            Route::post('/recipients/{recipientId}/respond', [MarketplaceRequestController::class, 'respond'])->name('recipients.respond');
         });
     });
 
