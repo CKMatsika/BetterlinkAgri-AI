@@ -25,3 +25,5 @@ yarn-error.log
 /mobile_app/build/
 /mobile_app/.flutter-plugins
 /mobile_app/.flutter-plugins-dependencies
+
+storage/app/test_leaf.jpg

@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\FarmPlannerController;
 use App\Http\Controllers\Api\V1\FarmerPrivacyController;
 use App\Http\Controllers\Api\V1\MarketplaceIntelligenceController;
 use App\Http\Controllers\Api\V1\MarketplaceRequestController;
+use App\Http\Controllers\Api\V1\MarketplaceTrustController;
 use App\Http\Controllers\Api\V1\OutletPortalApiController;
 use App\Http\Controllers\Api\V1\PlannerAuthController;
 use App\Http\Controllers\Api\V1\SmsUssdWebhookController;
@@ -83,6 +84,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/requests/{marketplaceRequestId}/substitutes/confirm', [MarketplaceRequestController::class, 'confirmSubstitute'])->name('requests.substitutes.confirm');
             Route::post('/requests/{marketplaceRequestId}/offers/{offerId}/accept', [MarketplaceRequestController::class, 'acceptOffer'])->name('requests.accept_offer');
             Route::post('/plan-requirements/{requirementId}/activate', [MarketplaceRequestController::class, 'activatePlanRequirement'])->name('plan_requirements.activate');
+            Route::post('/orders/{orderId}/rate', [MarketplaceTrustController::class, 'farmerRate'])->name('orders.farmer_rate');
+            Route::post('/orders/{orderId}/dispute', [MarketplaceTrustController::class, 'farmerDispute'])->name('orders.farmer_dispute');
         });
 
         Route::middleware(['auth:sanctum'])->group(function (): void {
@@ -90,6 +93,11 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/recipients/{recipientId}/opened', [MarketplaceRequestController::class, 'markOpened'])->name('recipients.opened');
             Route::post('/recipients/{recipientId}/respond', [MarketplaceRequestController::class, 'respond'])->name('recipients.respond');
             Route::post('/orders/{orderId}/complete', [MarketplaceIntelligenceController::class, 'completeOrder'])->name('orders.complete');
+            Route::post('/orders/{orderId}/rate-farmer', [MarketplaceTrustController::class, 'retailerRate'])->name('orders.retailer_rate');
+            Route::post('/orders/{orderId}/dispute/retailer', [MarketplaceTrustController::class, 'retailerDispute'])->name('orders.retailer_dispute');
+            Route::post('/orders/{orderId}/dispute/resolve', [MarketplaceTrustController::class, 'resolveDispute'])->name('orders.dispute_resolve');
+            Route::post('/seller-verifications', [MarketplaceTrustController::class, 'submitVerification'])->name('seller_verifications.submit');
+            Route::post('/seller-verifications/{verificationId}/review', [MarketplaceTrustController::class, 'reviewVerification'])->name('seller_verifications.review');
             Route::get('/intelligence/demand', [MarketplaceIntelligenceController::class, 'demand'])->name('intelligence.demand');
             Route::get('/intelligence/stock-signals', [MarketplaceIntelligenceController::class, 'stockSignals'])->name('intelligence.stock_signals');
             Route::get('/intelligence/upstream-requests', [MarketplaceIntelligenceController::class, 'upstreamRequests'])->name('intelligence.upstream_requests');
