@@ -167,3 +167,105 @@ it('marks sn and nd translations as needs_native_review and disables them by def
         ->and(config('betterlink.localization.translation_review_status.sn'))->toBe('needs_native_review')
         ->and(config('betterlink.localization.translation_review_status.nd'))->toBe('needs_native_review');
 });
+
+it('wires MistralAiProvider and MistralEmbeddingProvider fail-closed and parses vision, tools, and 1024-dim embeddings', function (): void {
+    config()->set('betterlink.ai.mistral.api_key', '');
+    $provider = app(\App\Services\Ai\Providers\MistralAiProvider::class);
+    $embedder = app(\App\Services\Ai\Embeddings\MistralEmbeddingProvider::class);
+
+    expect(fn () => $provider->chatWithTools('sys', [['role' => 'user', 'content' => 'hi']]))
+        ->toThrow(\RuntimeException::class, 'Mistral API key is not configured.');
+    expect(fn () => $embedder->embedText('maize'))
+        ->toThrow(\RuntimeException::class, 'Mistral API key is not configured for embeddings.');
+
+    config()->set('betterlink.ai.mistral.api_key', 'test-mistral-key-123');
+    \Illuminate\Support\Facades\Http::fake([
+        'https://api.mistral.ai/v1/chat/completions' => \Illuminate\Support\Facades\Http::sequence()
+            ->push([
+                'model' => 'mistral-small-latest',
+                'choices' => [[
+                    'message' => [
+                        'content' => 'How many broilers do you plan to house?',
+                        'tool_calls' => [[
+                            'id' => 'call_1',
+                            'type' => 'function',
+                            'function' => ['name' => 'check_stock', 'arguments' => '{"item":"starter_mash"}'],
+                        ]],
+                    ],
+                ]],
+                'usage' => ['prompt_tokens' => 40, 'completion_tokens' => 20],
+            ], 200)
+            ->push([
+                'model' => 'pixtral-large-latest',
+                'choices' => [[
+                    'message' => [
+                        'content' => '{"category":"pest","crop":"maize","summary":"Leaf feeding observed"}',
+                    ],
+                ]],
+            ], 200),
+        'https://api.mistral.ai/v1/embeddings' => \Illuminate\Support\Facades\Http::response([
+            'data' => [['embedding' => array_fill(0, 1024, 0.01)]],
+        ], 200),
+    ]);
+
+    $chat = $provider->chatWithTools('sys', [['role' => 'user', 'content' => '500 broilers']]);
+    expect($chat['text'])->toContain('How many broilers')
+        ->and($chat['tool_calls'][0]['name'])->toBe('check_stock')
+        ->and($chat['tool_calls'][0]['input']['item'])->toBe('starter_mash');
+
+    $vision = $provider->analyzeImageForDiagnosis(base64_encode('img'), 'image/jpeg', 'sys', 'diagnose');
+    expect($vision['crop'])->toBe('maize')
+        ->and($vision['category'])->toBe('pest');
+
+    $vec = $embedder->embedText('Compound D');
+    expect(count($vec))->toBe(1024);
+});
+
+it('wires NvidiaNimAiProvider and NvidiaNimEmbeddingProvider fail-closed, redacts nvapi keys, and parses vision, tools, and 1024-dim embeddings', function (): void {
+    expect(RedactSecretsProcessor::redactString('Error with nvapi-abcdefghijklmnop123456'))
+        ->not->toContain('nvapi-abcdefghijklmnop123456');
+
+    config()->set('betterlink.ai.nvidia_nim.api_key', '');
+    $provider = app(\App\Services\Ai\Providers\NvidiaNimAiProvider::class);
+    $embedder = app(\App\Services\Ai\Embeddings\NvidiaNimEmbeddingProvider::class);
+
+    expect(fn () => $provider->chatWithTools('sys', [['role' => 'user', 'content' => 'hi']]))
+        ->toThrow(\RuntimeException::class, 'NVIDIA NIM API key is not configured.');
+    expect(fn () => $embedder->embedText('maize'))
+        ->toThrow(\RuntimeException::class, 'NVIDIA NIM API key is not configured for embeddings.');
+
+    config()->set('betterlink.ai.nvidia_nim.api_key', 'nvapi-test-key-1234567890');
+    \Illuminate\Support\Facades\Http::fake([
+        'https://integrate.api.nvidia.com/v1/chat/completions' => \Illuminate\Support\Facades\Http::sequence()
+            ->push([
+                'model' => 'meta/llama-3.3-70b-instruct',
+                'choices' => [[
+                    'message' => [
+                        'content' => 'What district is your broiler house located in?',
+                        'tool_calls' => [],
+                    ],
+                ]],
+                'usage' => ['prompt_tokens' => 30, 'completion_tokens' => 15],
+            ], 200)
+            ->push([
+                'model' => 'meta/llama-3.2-90b-vision-instruct',
+                'choices' => [[
+                    'message' => [
+                        'content' => '{"category":"disease","crop":"tomato","summary":"Early blight spots"}',
+                    ],
+                ]],
+            ], 200),
+        'https://integrate.api.nvidia.com/v1/embeddings' => \Illuminate\Support\Facades\Http::response([
+            'data' => [['embedding' => array_fill(0, 1024, 0.02)]],
+        ], 200),
+    ]);
+
+    $chat = $provider->chatWithTools('sys', [['role' => 'user', 'content' => '500 broilers']]);
+    expect($chat['text'])->toContain('district');
+
+    $vision = $provider->analyzeImageForDiagnosis(base64_encode('img'), 'image/jpeg', 'sys', 'diagnose');
+    expect($vision['crop'])->toBe('tomato');
+
+    $vec = $embedder->embedText('Compound D');
+    expect(count($vec))->toBe(1024);
+});

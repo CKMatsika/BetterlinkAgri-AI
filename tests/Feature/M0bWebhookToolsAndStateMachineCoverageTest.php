@@ -126,7 +126,7 @@ it('executes all 13 deterministic AI tools through AiAgentService and logs each 
     $agent = app(AiAgentService::class);
     $registered = $agent->registeredToolNames();
 
-    expect($registered)->toHaveCount(13);
+    expect($registered)->toHaveCount(14)->toContain('create_marketplace_request');
 
     // 1. identify_from_image
     $r1 = $agent->executeTool($conversation, 'identify_from_image', ['attachment_id' => $attachment->id]);

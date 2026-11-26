@@ -11,10 +11,14 @@ use App\Contracts\VoiceTranscriberContract;
 use App\Contracts\WeatherProviderContract;
 use App\Logging\RedactSecretsProcessor;
 use App\Services\Ai\Embeddings\GeminiEmbeddingProvider;
+use App\Services\Ai\Embeddings\MistralEmbeddingProvider;
+use App\Services\Ai\Embeddings\NvidiaNimEmbeddingProvider;
 use App\Services\Ai\Embeddings\VoyageEmbeddingProvider;
 use App\Services\Ai\Providers\AnthropicClaudeProvider;
 use App\Services\Ai\Providers\FakeAiProvider;
 use App\Services\Ai\Providers\GeminiAiProvider;
+use App\Services\Ai\Providers\MistralAiProvider;
+use App\Services\Ai\Providers\NvidiaNimAiProvider;
 use App\Services\Ai\Voice\VoiceTranscriptionService;
 use App\Services\Channels\LogWhatsAppChannel;
 use App\Services\Channels\WhatsAppCloudService;
@@ -59,6 +63,14 @@ final class AppServiceProvider extends ServiceProvider
                 return $app->make(FakeAiProvider::class);
             }
 
+            if ($default === 'mistral') {
+                return $app->make(MistralAiProvider::class);
+            }
+
+            if ($default === 'nvidia_nim') {
+                return $app->make(NvidiaNimAiProvider::class);
+            }
+
             if ($default === 'gemini') {
                 return $app->make(GeminiAiProvider::class);
             }
@@ -68,6 +80,12 @@ final class AppServiceProvider extends ServiceProvider
 
         $this->app->bind(EmbeddingProviderContract::class, function ($app) {
             $provider = strtolower((string) config('betterlink.ai.embedding_provider', 'voyage'));
+            if ($provider === 'mistral') {
+                return $app->make(MistralEmbeddingProvider::class);
+            }
+            if ($provider === 'nvidia_nim') {
+                return $app->make(NvidiaNimEmbeddingProvider::class);
+            }
             if ($provider === 'gemini') {
                 return $app->make(GeminiEmbeddingProvider::class);
             }

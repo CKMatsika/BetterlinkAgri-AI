@@ -9,10 +9,14 @@ use App\Enums\MarketplaceRequestStatus;
 use App\Models\Farmer;
 use App\Models\MarketplaceRequest;
 use App\Models\Offer;
+use App\Models\PlanRequirement;
+use App\Models\Product;
 use App\Models\RequestItem;
 use App\Models\RequestRecipient;
 use App\Services\Marketplace\MarketplaceBroadcastService;
+use App\Services\Marketplace\MarketplaceFromDiagnosisAndPlanService;
 use App\Services\Marketplace\MarketplaceOfferAndOrderService;
+use App\Services\Marketplace\SubstituteResolverService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +25,9 @@ final class MarketplaceRequestController
 {
     public function __construct(
         private readonly MarketplaceBroadcastService $broadcastService,
-        private readonly MarketplaceOfferAndOrderService $offerAndOrderService
+        private readonly MarketplaceOfferAndOrderService $offerAndOrderService,
+        private readonly SubstituteResolverService $substituteResolver,
+        private readonly MarketplaceFromDiagnosisAndPlanService $fromDiagnosisAndPlan
     ) {
     }
 
@@ -273,5 +279,95 @@ final class MarketplaceRequestController
         $updated = $this->broadcastService->recordRecipientResponse($recipient, $validated['action']);
 
         return response()->json(['recipient' => $updated]);
+    }
+
+    public function substitutes(Request $request, string $marketplaceRequestId): JsonResponse
+    {
+        $farmerId = (string) $request->attributes->get('planner_farmer_id', '');
+        $marketRequest = MarketplaceRequest::withoutGlobalScopes()
+            ->with(['items'])
+            ->findOrFail($marketplaceRequestId);
+
+        if ($marketRequest->farmer_id !== $farmerId) {
+            abort(403, 'You do not have access to this request.');
+        }
+
+        $firstItem = $marketRequest->items->firstWhere('product_id', '!=', null);
+        if ($firstItem === null || $firstItem->product_id === null) {
+            return response()->json(['substitutes' => []]);
+        }
+
+        $originalProduct = Product::withoutGlobalScopes()->find($firstItem->product_id);
+        if ($originalProduct === null) {
+            return response()->json(['substitutes' => []]);
+        }
+
+        $substitutes = $this->substituteResolver->findSafeInStockSubstitutes(
+            originalProduct: $originalProduct,
+            lat: (float) ($marketRequest->approx_latitude ?? -17.8292),
+            lng: (float) ($marketRequest->approx_longitude ?? 31.0522),
+            cropId: $request->query('crop_id') ? (string) $request->query('crop_id') : null,
+            targetCode: $request->query('target_code') ? (string) $request->query('target_code') : null
+        );
+
+        return response()->json(['substitutes' => $substitutes]);
+    }
+
+    public function confirmSubstitute(Request $request, string $marketplaceRequestId): JsonResponse
+    {
+        $farmerId = (string) $request->attributes->get('planner_farmer_id', '');
+        $farmer = Farmer::query()->findOrFail($farmerId);
+
+        $marketRequest = MarketplaceRequest::withoutGlobalScopes()->findOrFail($marketplaceRequestId);
+        if ($marketRequest->farmer_id !== $farmerId) {
+            abort(403, 'You do not have access to this request.');
+        }
+
+        $validated = $request->validate([
+            'substitute_product_id' => ['required', 'uuid'],
+            'quantity_scaled' => ['required', 'integer', 'min:1'],
+            'unit' => ['required', 'string', 'max:30'],
+        ]);
+
+        $substituteProduct = Product::withoutGlobalScopes()->findOrFail((string) $validated['substitute_product_id']);
+        $newReq = $this->fromDiagnosisAndPlan->confirmSubstitute(
+            farmer: $farmer,
+            originalRequest: $marketRequest,
+            substituteProduct: $substituteProduct,
+            quantityScaled: (int) $validated['quantity_scaled'],
+            unit: (string) $validated['unit']
+        );
+
+        return response()->json([
+            'request' => $newReq,
+            'counters' => $this->broadcastService->liveCounters($newReq),
+        ], 201);
+    }
+
+    public function activatePlanRequirement(Request $request, string $requirementId): JsonResponse
+    {
+        $farmerId = (string) $request->attributes->get('planner_farmer_id', '');
+        $requirement = PlanRequirement::query()->with('farmPlan')->findOrFail($requirementId);
+
+        if ($requirement->farmPlan?->farmer_id !== $farmerId) {
+            abort(403, 'You do not have access to this plan requirement.');
+        }
+
+        $validated = $request->validate([
+            'approx_latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'approx_longitude' => ['nullable', 'numeric', 'between:-180,180'],
+        ]);
+
+        $marketRequest = $this->fromDiagnosisAndPlan->activatePlanRequirement(
+            requirement: $requirement,
+            lat: (float) ($validated['approx_latitude'] ?? -17.8292),
+            lng: (float) ($validated['approx_longitude'] ?? 31.0522)
+        );
+
+        return response()->json([
+            'requirement' => $requirement->fresh(),
+            'request' => $marketRequest,
+            'counters' => $this->broadcastService->liveCounters($marketRequest),
+        ], 201);
     }
 }

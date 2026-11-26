@@ -78,7 +78,10 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/requests', [MarketplaceRequestController::class, 'store'])->name('requests.store');
             Route::get('/requests/{marketplaceRequestId}', [MarketplaceRequestController::class, 'show'])->name('requests.show');
             Route::get('/requests/{marketplaceRequestId}/counters', [MarketplaceRequestController::class, 'counters'])->name('requests.counters');
+            Route::get('/requests/{marketplaceRequestId}/substitutes', [MarketplaceRequestController::class, 'substitutes'])->name('requests.substitutes');
+            Route::post('/requests/{marketplaceRequestId}/substitutes/confirm', [MarketplaceRequestController::class, 'confirmSubstitute'])->name('requests.substitutes.confirm');
             Route::post('/requests/{marketplaceRequestId}/offers/{offerId}/accept', [MarketplaceRequestController::class, 'acceptOffer'])->name('requests.accept_offer');
+            Route::post('/plan-requirements/{requirementId}/activate', [MarketplaceRequestController::class, 'activatePlanRequirement'])->name('plan_requirements.activate');
         });
 
         Route::middleware(['auth:sanctum'])->group(function (): void {

@@ -14,6 +14,7 @@ final class RedactSecretsProcessor implements ProcessorInterface
 {
     private const SECRET_PATTERNS = [
         '/sk-ant-[A-Za-z0-9\-_]{10,}/' => '[REDACTED_ANTHROPIC_KEY]',
+        '/nvapi-[A-Za-z0-9\-_]{16,}/' => '[REDACTED_NVIDIA_NIM_KEY]',
         '/AIza[0-9A-Za-z\-_]{20,}/' => '[REDACTED_GOOGLE_KEY]',
         '/AQ\.[A-Za-z0-9\-_]{20,}/' => '[REDACTED_VERTEX_KEY]',
         '/EAA[A-Za-z0-9]{20,}/' => '[REDACTED_META_TOKEN]',

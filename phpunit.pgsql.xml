@@ -34,8 +34,11 @@
         <env name="FILESYSTEM_DISK" value="local" force="true"/>
         <env name="MEDIA_DISK" value="local" force="true"/>
         <env name="AI_DEFAULT_PROVIDER" value="fake" force="true"/>
+        <env name="AI_EMBEDDING_PROVIDER" value="fake" force="true"/>
         <env name="ANTHROPIC_API_KEY" value="" force="true"/>
         <env name="GEMINI_API_KEY" value="" force="true"/>
+        <env name="MISTRAL_API_KEY" value="" force="true"/>
+        <env name="NVIDIA_NIM_API_KEY" value="" force="true"/>
         <env name="VOYAGE_API_KEY" value="" force="true"/>
         <env name="OPENAI_API_KEY" value="" force="true"/>
         <env name="WHATSAPP_ENABLED" value="false" force="true"/>

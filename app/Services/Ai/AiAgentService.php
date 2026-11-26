@@ -11,6 +11,7 @@ use App\Models\Conversation;
 use App\Services\Ai\Tools\CalculateApplicationRateTool;
 use App\Services\Ai\Tools\CheckOutletStockTool;
 use App\Services\Ai\Tools\CreateLeadTool;
+use App\Services\Ai\Tools\CreateMarketplaceRequestTool;
 use App\Services\Ai\Tools\CreateReservationTool;
 use App\Services\Ai\Tools\FindNearestOutletsTool;
 use App\Services\Ai\Tools\GetWeatherTool;
@@ -25,7 +26,7 @@ use InvalidArgumentException;
 
 /**
  * Central AI Agent Service behind swappable AiProviderContract.
- * Registers all 13 deterministic tools and logs every tool execution to audit_logs.
+ * Registers all 14 deterministic tools and logs every tool execution to audit_logs.
  */
 final class AiAgentService
 {
@@ -43,6 +44,7 @@ final class AiAgentService
         FindNearestOutletsTool $findNearestOutletsTool,
         CheckOutletStockTool $checkOutletStockTool,
         CreateReservationTool $createReservationTool,
+        CreateMarketplaceRequestTool $createMarketplaceRequestTool,
         RequestFarmerLocationTool $requestFarmerLocationTool,
         CreateLeadTool $createLeadTool,
         HandoffToHumanTool $handoffToHumanTool,
@@ -58,6 +60,7 @@ final class AiAgentService
             $findNearestOutletsTool,
             $checkOutletStockTool,
             $createReservationTool,
+            $createMarketplaceRequestTool,
             $requestFarmerLocationTool,
             $createLeadTool,
             $handoffToHumanTool,
@@ -70,7 +73,7 @@ final class AiAgentService
     }
 
     /**
-     * Return all 13 registered tool names.
+     * Return all 14 registered tool names.
      *
      * @return list<string>
      */
