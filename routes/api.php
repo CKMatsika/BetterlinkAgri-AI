@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Api\V1\FarmPlannerController;
 use App\Http\Controllers\Api\V1\FarmerPrivacyController;
+use App\Http\Controllers\Api\V1\ForwardQuoteAndFinanceController;
 use App\Http\Controllers\Api\V1\MarketplaceIntelligenceController;
 use App\Http\Controllers\Api\V1\MarketplaceRequestController;
 use App\Http\Controllers\Api\V1\MarketplaceTrustController;
@@ -91,6 +92,10 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/bookings', [ServiceBookingController::class, 'farmerIndex'])->name('bookings.index');
             Route::post('/bookings', [ServiceBookingController::class, 'store'])->name('bookings.store');
             Route::post('/bookings/{bookingId}/cancel', [ServiceBookingController::class, 'farmerCancel'])->name('bookings.cancel');
+            Route::post('/forward-quotes', [ForwardQuoteAndFinanceController::class, 'requestForwardQuote'])->name('forward_quotes.store');
+            Route::post('/forward-quotes/{quoteId}/accept', [ForwardQuoteAndFinanceController::class, 'acceptForwardQuote'])->name('forward_quotes.accept');
+            Route::post('/finance/applications', [ForwardQuoteAndFinanceController::class, 'submitFinanceApplication'])->name('finance.applications.store');
+            Route::post('/finance/revoke-consent/{bankTenantId}', [ForwardQuoteAndFinanceController::class, 'revokeBankConsent'])->name('finance.revoke_consent');
         });
 
         Route::middleware(['auth:sanctum'])->group(function (): void {
@@ -105,6 +110,10 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/seller-verifications/{verificationId}/review', [MarketplaceTrustController::class, 'reviewVerification'])->name('seller_verifications.review');
             Route::get('/provider/bookings', [ServiceBookingController::class, 'providerIndex'])->name('provider.bookings.index');
             Route::post('/provider/bookings/{bookingId}/status', [ServiceBookingController::class, 'providerUpdateStatus'])->name('provider.bookings.status');
+            Route::get('/offtaker/forward-quotes', [ForwardQuoteAndFinanceController::class, 'offtakerIndex'])->name('offtaker.forward_quotes.index');
+            Route::post('/offtaker/forward-quotes/{quoteId}/quote', [ForwardQuoteAndFinanceController::class, 'submitOfftakerQuote'])->name('offtaker.forward_quotes.quote');
+            Route::get('/bank/applications', [ForwardQuoteAndFinanceController::class, 'bankIndex'])->name('bank.applications.index');
+            Route::post('/bank/applications/{applicationId}/review', [ForwardQuoteAndFinanceController::class, 'reviewFinanceApplication'])->name('bank.applications.review');
             Route::get('/intelligence/demand', [MarketplaceIntelligenceController::class, 'demand'])->name('intelligence.demand');
             Route::get('/intelligence/stock-signals', [MarketplaceIntelligenceController::class, 'stockSignals'])->name('intelligence.stock_signals');
             Route::get('/intelligence/upstream-requests', [MarketplaceIntelligenceController::class, 'upstreamRequests'])->name('intelligence.upstream_requests');
