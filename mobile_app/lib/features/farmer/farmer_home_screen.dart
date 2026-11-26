@@ -153,6 +153,32 @@ class _FarmerHomeScreenState extends ConsumerState<FarmerHomeScreen> {
             ),
           ),
 
+          // P1c Quick Navigation Strip: Farm Planner & Live Input Marketplace
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    key: const Key('nav_farm_planner_btn'),
+                    onPressed: () => context.go('/planner'),
+                    icon: const Icon(Icons.calculate_outlined),
+                    label: const Text('Farm Planner'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    key: const Key('nav_marketplace_btn'),
+                    onPressed: () => context.go('/marketplace'),
+                    icon: const Icon(Icons.shopping_bag_outlined),
+                    label: const Text('Marketplace'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           // Chat & Rich Cards Stream
           Expanded(
             child: ListView.builder(

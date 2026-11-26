@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'features/farmer/farmer_home_screen.dart';
+import 'features/marketplace/marketplace_screen.dart';
+import 'features/planner/farm_planner_screen.dart';
 import 'features/rep/rep_inbox_screen.dart';
 
 final _router = GoRouter(
@@ -10,6 +12,14 @@ final _router = GoRouter(
     GoRoute(
       path: '/',
       builder: (context, state) => const FarmerHomeScreen(),
+    ),
+    GoRoute(
+      path: '/planner',
+      builder: (context, state) => const FarmPlannerScreen(),
+    ),
+    GoRoute(
+      path: '/marketplace',
+      builder: (context, state) => const MarketplaceScreen(),
     ),
     GoRoute(
       path: '/rep',
